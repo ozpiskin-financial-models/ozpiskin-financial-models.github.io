@@ -4,40 +4,37 @@ Ozpiskin Financial Models — one Streamlit site for every model.
 Run locally with:
     streamlit run streamlit_app.py
 
-Each model lives in its own page under views/. To add a new model, create
-views/<model>.py, add an st.Page for it below and a card in views/home.py.
+Each model has a calculation engine in models/ and a page in views/. To add a
+model: create both, register the page in PAGES below and add it to
+views/home.py.
 """
 
 import streamlit as st
+
+from ui import kit
 
 st.set_page_config(
     page_title="Ozpiskin Financial Models",
     page_icon="assets/favicon.svg",
     layout="wide",
-    initial_sidebar_state="auto",
+    initial_sidebar_state="collapsed",
 )
+kit.inject_global_css()
 
-st.logo("assets/logo.svg", size="large", icon_image="assets/favicon.svg")
+home = st.Page("views/home.py", title="Models", default=True)
+crude_oil = st.Page("views/crude_oil.py", title="WTI Crude Oil", url_path="crude-oil")
+macro_floor = st.Page("views/macro_floor.py", title="Macro Floor", url_path="macro-floor")
 
-# Site-wide chrome: hide Streamlit's own menu/footer, keep the top navigation bar.
-st.markdown(
-    """
-<style>
-#MainMenu, footer, .stDeployButton, [data-testid="stToolbar"] { display: none !important; }
-.stApp {
-  background:
-    radial-gradient(circle at top left, rgba(8, 145, 178, 0.12), transparent 28%),
-    radial-gradient(circle at top right, rgba(167, 139, 250, 0.08), transparent 26%),
-    #070b16;
-}
-header[data-testid="stHeader"] { background: rgba(7, 11, 22, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(148, 163, 184, 0.12); }
-</style>
-""",
-    unsafe_allow_html=True,
-)
+current = st.navigation([home, crude_oil, macro_floor], position="hidden")
 
-home = st.Page("views/home.py", title="Home", icon=":material/home:", default=True)
-crude_oil = st.Page("views/crude_oil.py", title="WTI Crude Oil", icon=":material/oil_barrel:", url_path="crude-oil")
-macro_floor = st.Page("views/macro_floor.py", title="Macro Floor", icon=":material/monitoring:", url_path="macro-floor")
+with st.container(key="topnav", horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
+    with st.container(key="navbrand", width="content"):
+        st.page_link(home, label="Ozpiskin")
+    with st.container(key="navlinks", horizontal=True, width="content", gap="large", vertical_alignment="center"):
+        for slug, page in (("home", home), ("crude", crude_oil), ("macro", macro_floor)):
+            state = "on" if page.url_path == current.url_path else "off"
+            with st.container(key=f"nav{state}_{slug}", width="content"):
+                st.page_link(page)
 
-st.navigation([home, crude_oil, macro_floor], position="top").run()
+current.run()
+kit.footer()

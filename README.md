@@ -11,12 +11,14 @@ app with a page per model.
 ## Structure
 
 ```
-streamlit_app.py            entry point: page config, logo, top navigation
-views/home.py               landing page (model cards, research pipeline, about)
-views/crude_oil.py          WTI Crude Oil dashboard (Dash layout ported to Streamlit)
-views/macro_floor.py        Macro Floor dashboard (from live_uncle_tracker.py)
-models/crude_oil_engine.py  crude-oil calculation engine (main.py without the FastAPI server)
-.streamlit/config.toml      dark theme
+streamlit_app.py              entry point: page config, top navigation, footer
+ui/kit.py                     shared design system (theme, KPI strip, tables, tabs, chart style)
+views/home.py                 landing page
+views/crude_oil.py            WTI Crude Oil page
+views/macro_floor.py          Macro Floor page
+models/crude_oil_engine.py    crude-oil calculations (main.py without the FastAPI server)
+models/macro_floor_engine.py  Macro Floor calculations (from live_uncle_tracker.py)
+.streamlit/config.toml        theme
 requirements.txt
 ```
 
@@ -42,8 +44,8 @@ streamlit run streamlit_app.py
 ## Adding a new model
 
 1. Put the model's calculation code in `models/`.
-2. Create `views/<model>.py` for its dashboard.
-3. Register it with `st.Page(...)` in `streamlit_app.py` and add a card in `views/home.py`.
+2. Create `views/<model>.py` using the helpers in `ui/kit.py` (page_header, kpi_strip, subnav, section, table, chart).
+3. Register it with `st.Page(...)` in `streamlit_app.py` (page list and nav links) and add a card in `views/home.py`.
 4. Push — Streamlit Cloud redeploys automatically.
 
 ---

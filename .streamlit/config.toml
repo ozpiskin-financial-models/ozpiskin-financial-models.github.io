@@ -1,12 +1,15 @@
 [theme]
 base = "dark"
-primaryColor = "#67e8f9"
-backgroundColor = "#070b16"
-secondaryBackgroundColor = "#0d1424"
-textColor = "#e2e8f0"
+primaryColor = "#c9a96e"
+backgroundColor = "#050505"
+secondaryBackgroundColor = "#101010"
+textColor = "#ededec"
+borderColor = "#232323"
+baseRadius = "none"
+showWidgetBorder = true
 
 [client]
-toolbarMode = "viewer"
+toolbarMode = "minimal"
 
 [server]
 headless = true
