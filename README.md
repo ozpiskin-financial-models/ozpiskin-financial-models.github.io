@@ -35,6 +35,7 @@ streamlit run streamlit_app.py
 2. Repository `ozpiskin-financial-models/ozpiskin-financial-models.github.io`,
    branch `main`, main file `streamlit_app.py`.
 3. App URL: `ozpiskin-financial-models` → `https://ozpiskin-financial-models.streamlit.app`.
+   `https://ozpiskin-financial-models.github.io` redirects there (index.html).
 4. Advanced settings → Secrets:
    ```toml
    MONGO_URI = "mongodb+srv://..."   # Macro Floor portfolio storage
