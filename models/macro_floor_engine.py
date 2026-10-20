@@ -8,14 +8,16 @@ the same file, moved into a function so the page can call it. The default
 universe is BIST-only (see DEFAULT_TICKERS).
 
 One addition to the original (requested by the author, Oct 2026): idle cash
-is no longer left at 0%. It earns the Turkey 10Y yield — the same risk-free
-alternative the floors are built on — compounded daily (ACT/365). See
+is no longer left at 0%. Each day it earns the TCMB overnight borrowing rate in
+force on that day (data/tcmb_overnight.csv), compounded daily (ACT/365), so the
+backtest never applies today's rate to past years. See grow_cash(),
 accrue_cash() and the interest lines in _run_full_backtest().
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -38,6 +40,39 @@ DEFAULT_TICKERS = [
     "THYAO.IS", "AKBNK.IS", "ISCTR.IS", "TUPRS.IS", "GARAN.IS",
     "SISE.IS", "KCHOL.IS", "SAHOL.IS",
 ]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# INTEREST ON IDLE CASH — TCMB overnight borrowing rate, as in force each day
+# ═══════════════════════════════════════════════════════════════════════════
+RATES_FILE = Path(__file__).resolve().parent.parent / "data" / "tcmb_overnight.csv"
+
+
+@st.cache_data(show_spinner=False)
+def overnight_rates() -> pd.Series:
+    """TCMB O/N borrowing rate (decimal), indexed by the date each rate took effect."""
+    frame = pd.read_csv(RATES_FILE, comment="#", parse_dates=["date"])
+    return (frame.set_index("date")["borrowing"] / 100.0).sort_index()
+
+
+def overnight_rate_on(day) -> float:
+    rates = overnight_rates()
+    in_force = rates[rates.index <= pd.Timestamp(day)]
+    return float(in_force.iloc[-1]) if len(in_force) else float(rates.iloc[0])
+
+
+def grow_cash(amount: float, start, end) -> float:
+    """Value at `end` of `amount` held from `start`, compounding daily (ACT/365) at the rate in force each day."""
+    start, end = pd.Timestamp(start).normalize(), pd.Timestamp(end).normalize()
+    if amount <= 0 or end <= start:
+        return amount
+    rates = overnight_rates()
+    changes = [d for d in rates.index if start < d < end]
+    value, cursor = amount, start
+    for boundary in changes + [end]:
+        value *= (1 + overnight_rate_on(cursor)) ** ((boundary - cursor).days / 365)
+        cursor = boundary
+    return value
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -227,9 +262,9 @@ def _run_full_backtest(macros: dict) -> dict:
     interest_earned, prev_d = 0.0, None
 
     for d in all_dates:
-        # Idle cash earns the TR 10Y yield, compounded over calendar days (ACT/365).
+        # Idle cash earns the TCMB overnight rate in force on each day (ACT/365).
         if prev_d is not None:
-            interest = cash * ((1 + tr_10y) ** ((d - prev_d).days / 365) - 1)
+            interest = grow_cash(cash, prev_d, d) - cash
             cash += interest
             interest_earned += interest
         prev_d = d
@@ -291,25 +326,23 @@ def _run_full_backtest(macros: dict) -> dict:
         "inception": all_dates[0].strftime('%Y-%m-%d') if all_dates else "2021-10-01",
         "cash_as_of": all_dates[-1].strftime('%Y-%m-%d') if all_dates else datetime.now().strftime('%Y-%m-%d'),
         "interest_earned": round(interest_earned, 2),
-        "cash_rate": tr_10y,
     }
 
 
-def accrue_cash(pf: dict, annual_rate: float, as_of: datetime | None = None) -> float:
-    """Grow idle cash at `annual_rate` (daily compounding, ACT/365) from pf["cash_as_of"] to `as_of`.
+def accrue_cash(pf: dict, as_of: date | None = None) -> float:
+    """Grow idle cash from pf["cash_as_of"] to `as_of` at the TCMB overnight rates in force.
 
     Updates pf in place (cash, cash_as_of, interest_earned) and returns the interest added.
     A portfolio saved before this feature has no cash_as_of; it starts accruing from today.
     """
-    today = (as_of or datetime.now()).date()
+    today = as_of or datetime.now().date()
     start = pf.get("cash_as_of")
     pf["cash_as_of"] = today.strftime("%Y-%m-%d")
     if not start:
         return 0.0
-    days = (today - datetime.strptime(start[:10], "%Y-%m-%d").date()).days
-    if days <= 0:
+    if (today - datetime.strptime(start[:10], "%Y-%m-%d").date()).days <= 0:
         return 0.0
-    interest = pf.get("cash", 0.0) * ((1 + annual_rate) ** (days / 365) - 1)
+    interest = grow_cash(pf.get("cash", 0.0), start[:10], today) - pf.get("cash", 0.0)
     pf["cash"] = round(pf.get("cash", 0.0) + interest, 2)
     pf["interest_earned"] = round(pf.get("interest_earned", 0.0) + interest, 2)
     return interest
@@ -325,7 +358,7 @@ def run_scan(pf: dict, tickers: list, tr10: float, md: float, pos_pct: float, tr
     Returns (results, actions): results are deep_analyze() rows plus "ticker",
     actions are (kind, ticker, price, pnl) tuples for this scan.
     """
-    accrue_cash(pf, tr10)  # bring idle cash up to date before sizing new positions
+    accrue_cash(pf)  # bring idle cash up to date before sizing new positions
     results, actions = [], []
     for idx, t in enumerate(tickers):
         if on_progress:
