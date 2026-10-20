@@ -18,7 +18,8 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from models.macro_floor_engine import (
-    DEFAULT_TICKERS, _run_full_backtest, accrue_cash, deep_analyze, fetch_macros, load_pf, overnight_rate_on, overnight_rates, run_scan, save_pf,
+    DEFAULT_TICKERS, _run_full_backtest, accrue_cash, deep_analyze, fetch_macros, load_pf, overnight_rate_on, overnight_table,
+    record_daily_tr10, run_scan, save_pf, tr10y_history,
 )
 from ui import kit
 
@@ -67,8 +68,11 @@ with st.spinner("Loading macro inputs and the simulated portfolio…"):
 md = macros["margin_discount"]
 tr10 = macros["tr_10y"]
 accrue_cash(pf)  # display only: interest since the last save; persisted on the next scan
+record_daily_tr10(datetime.now().strftime("%Y-%m-%d"), tr10)  # grows the TR 10Y history automatically
 cash_rate = overnight_rate_on(datetime.now())
-rates_as_of = overnight_rates().index[-1]
+rates, rates_source = overnight_table()
+rates_as_of = rates.index[-1]
+tr10_days = tr10y_history()
 
 hv = sum(h["qty"] * (deep_analyze(t, tr10, md) or {}).get("price", h["cost"]) for t, h in pf.get("holdings", {}).items())
 cash = pf.get("cash", START_CAPITAL)
@@ -311,8 +315,9 @@ def render_methodology() -> None:
                 ("TR 10Y yield", "TradingView TVC:TR10Y", "Falls back to 32.0% if the feed is unavailable."),
                 ("Portfolio state", "MongoDB Atlas", "Session-only if the database is unreachable."),
                 ("Backtest", "Model engine", "₺100,000 start, 25% position size, 12% trailing stop, 90-day time stop."),
-                ("Interest on cash", "TCMB overnight borrowing rate", f"Rate in force on each day, from data/tcmb_overnight.csv (latest change {rates_as_of:%d %b %Y}, {cash_rate * 100:.2f}%). Compounded daily, ACT/365."),
-                ("Bond floors in the backtest", "Original model", "The 5-year replay uses today's TR 10Y yield for the floors in every past year, as in the original code."),
+                ("Interest on cash", f"TCMB overnight borrowing rate · {rates_source}", f"Rate in force on each day (latest change {rates_as_of:%d %b %Y}, {cash_rate * 100:.2f}%). Compounded daily, ACT/365."),
+                ("TR 10Y daily history", "Investing.com export + daily live record", f"{len(tr10_days)} days stored ({tr10_days.index[0]:%d %b %Y} – {tr10_days.index[-1]:%d %b %Y}); one new observation is saved each day the site runs."),
+                ("Bond floors in the backtest", "Original model", "The 5-year replay still uses today's TR 10Y yield for every past year, as in the original code, until the daily history covers the full period."),
                 ("Universe & currency", "Model engine", "8 Borsa Istanbul stocks; every price, position and P&L is in Turkish lira (TRY)."),
             ],
         )

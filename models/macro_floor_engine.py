@@ -16,6 +16,7 @@ accrue_cash() and the interest lines in _run_full_backtest().
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from pathlib import Path
 
@@ -45,14 +46,45 @@ DEFAULT_TICKERS = [
 # ═══════════════════════════════════════════════════════════════════════════
 # INTEREST ON IDLE CASH — TCMB overnight borrowing rate, as in force each day
 # ═══════════════════════════════════════════════════════════════════════════
-RATES_FILE = Path(__file__).resolve().parent.parent / "data" / "tcmb_overnight.csv"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+RATES_FILE = DATA_DIR / "tcmb_overnight.csv"
+TCMB_RATES_URL = (
+    "https://www.tcmb.gov.tr/wps/wcm/connect/TR/TCMB+TR/Main+Menu/Temel+Faaliyetler/"
+    "Para+Politikasi/Merkez+Bankasi+Faiz+Oranlari/faiz-oranlari"
+)
 
 
-@st.cache_data(show_spinner=False)
-def overnight_rates() -> pd.Series:
-    """TCMB O/N borrowing rate (decimal), indexed by the date each rate took effect."""
+def _fetch_tcmb_overnight() -> pd.Series | None:
+    """Read the O/N borrowing-rate table from TCMB's website; None if unavailable or malformed."""
+    try:
+        page = requests.get(TCMB_RATES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10).text
+        cells = [re.sub(r"<[^>]+>", "", c).replace("&nbsp;", "").strip() for c in re.findall(r"<td[^>]*>(.*?)</td>", page, re.S)]
+        rates = {}
+        for i, cell in enumerate(cells[:-2]):
+            m = re.fullmatch(r"(\d{2})\.(\d{2})\.(\d{2})", cell)
+            if m:
+                rates[pd.Timestamp(2000 + int(m[3]), int(m[2]), int(m[1]))] = float(cells[i + 1].replace(",", ".")) / 100.0
+        return pd.Series(rates).sort_index() if len(rates) >= 100 else None
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=12 * 3600, show_spinner=False)
+def overnight_table() -> tuple[pd.Series, str]:
+    """(TCMB O/N borrowing rate as decimals indexed by effective date, source label).
+
+    Fetched live from TCMB twice a day; data/tcmb_overnight.csv is the fallback and fills any gaps.
+    """
     frame = pd.read_csv(RATES_FILE, comment="#", parse_dates=["date"])
-    return (frame.set_index("date")["borrowing"] / 100.0).sort_index()
+    saved = (frame.set_index("date")["borrowing"] / 100.0).sort_index()
+    live = _fetch_tcmb_overnight()
+    if live is None:
+        return saved, "data/tcmb_overnight.csv"
+    return live.combine_first(saved).sort_index(), "tcmb.gov.tr (live)"
+
+
+def overnight_rates() -> pd.Series:
+    return overnight_table()[0]
 
 
 def overnight_rate_on(day) -> float:
@@ -73,6 +105,41 @@ def grow_cash(amount: float, start, end) -> float:
         value *= (1 + overnight_rate_on(cursor)) ** ((boundary - cursor).days / 365)
         cursor = boundary
     return value
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TR 10Y DAILY HISTORY — seed file + one live observation per day in MongoDB
+# ═══════════════════════════════════════════════════════════════════════════
+TR10Y_FILE = DATA_DIR / "tr10y_history.csv"
+LIVE_FALLBACK_TR10 = 0.320  # fetch_macros() default when TradingView is unreachable — never recorded
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def record_daily_tr10(day: str, tr10: float) -> bool:
+    """Store the day's live TR 10Y in MongoDB (at most once an hour) so the history grows by itself."""
+    if abs(tr10 - LIVE_FALLBACK_TR10) < 1e-12:
+        return False
+    try:
+        _mongo()["macro_floor_db"]["tr10y_daily"].update_one(
+            {"_id": day}, {"$set": {"yield": round(tr10 * 100, 3), "source": "TradingView"}}, upsert=True
+        )
+        return True
+    except Exception:
+        return False
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def tr10y_history() -> pd.Series:
+    """Daily TR 10Y yield (decimal): the seed file, extended by the live observations stored in MongoDB."""
+    frame = pd.read_csv(TR10Y_FILE, comment="#", parse_dates=["date"])
+    series = (frame.set_index("date")["yield"] / 100.0).sort_index()
+    try:
+        docs = list(_mongo()["macro_floor_db"]["tr10y_daily"].find())
+        recorded = pd.Series({pd.Timestamp(d["_id"]): d["yield"] / 100.0 for d in docs})
+        series = series.combine_first(recorded).sort_index()
+    except Exception:
+        pass
+    return series
 
 
 # ═══════════════════════════════════════════════════════════════════════════
