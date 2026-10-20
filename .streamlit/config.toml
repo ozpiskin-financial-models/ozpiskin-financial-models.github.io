@@ -1,12 +1,13 @@
 [theme]
 base = "dark"
-primaryColor = "#c9a96e"
-backgroundColor = "#050505"
-secondaryBackgroundColor = "#101010"
-textColor = "#ededec"
-borderColor = "#232323"
-baseRadius = "none"
+primaryColor = "#34D399"
+backgroundColor = "#0B0F14"
+secondaryBackgroundColor = "#161F2A"
+textColor = "#F1F5F9"
+borderColor = "#283442"
+baseRadius = "medium"
 showWidgetBorder = true
+font = "sans-serif"
 
 [client]
 toolbarMode = "minimal"

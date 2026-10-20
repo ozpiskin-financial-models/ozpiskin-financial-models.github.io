@@ -5,7 +5,7 @@ Run locally with:
     streamlit run streamlit_app.py
 
 Each model has a calculation engine in models/ and a page in views/. To add a
-model: create both, register the page in PAGES below and add it to
+model: create both, register the page in NAV_PAGES below and add it to
 views/home.py.
 """
 
@@ -24,17 +24,9 @@ kit.inject_global_css()
 home = st.Page("views/home.py", title="Models", default=True)
 crude_oil = st.Page("views/crude_oil.py", title="WTI Crude Oil", url_path="crude-oil")
 macro_floor = st.Page("views/macro_floor.py", title="Macro Floor", url_path="macro-floor")
+NAV_PAGES = [("home", home), ("crude", crude_oil), ("macro", macro_floor)]
 
-current = st.navigation([home, crude_oil, macro_floor], position="hidden")
-
-with st.container(key="topnav", horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
-    with st.container(key="navbrand", width="content"):
-        st.page_link(home, label="Ozpiskin")
-    with st.container(key="navlinks", horizontal=True, width="content", gap="large", vertical_alignment="center"):
-        for slug, page in (("home", home), ("crude", crude_oil), ("macro", macro_floor)):
-            state = "on" if page.url_path == current.url_path else "off"
-            with st.container(key=f"nav{state}_{slug}", width="content"):
-                st.page_link(page)
-
+current = st.navigation([page for _, page in NAV_PAGES], position="hidden")
+kit.top_nav(NAV_PAGES, home, current)
 current.run()
 kit.footer()
