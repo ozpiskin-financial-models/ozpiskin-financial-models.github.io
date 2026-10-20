@@ -5,7 +5,12 @@ Copied unchanged from live_uncle_tracker.py in the
 Macro-Floor-Forced-Liquidation-Model repository (macro feed, MongoDB storage,
 signal engine and 5-year backtest). run_scan() is the Signal Radar loop from
 the same file, moved into a function so the page can call it. The default
-universe is BIST-only (see DEFAULT_TICKERS); the calculations are unchanged.
+universe is BIST-only (see DEFAULT_TICKERS).
+
+One addition to the original (requested by the author, Oct 2026): idle cash
+is no longer left at 0%. It earns the Turkey 10Y yield — the same risk-free
+alternative the floors are built on — compounded daily (ACT/365). See
+accrue_cash() and the interest lines in _run_full_backtest().
 """
 
 from __future__ import annotations
@@ -219,8 +224,16 @@ def _run_full_backtest(macros: dict) -> dict:
     pos_pct, trail, time_days = 0.25, 0.12, 90
     peak_equity = 100_000.0
     max_dd = 0.0
+    interest_earned, prev_d = 0.0, None
 
     for d in all_dates:
+        # Idle cash earns the TR 10Y yield, compounded over calendar days (ACT/365).
+        if prev_d is not None:
+            interest = cash * ((1 + tr_10y) ** ((d - prev_d).days / 365) - 1)
+            cash += interest
+            interest_earned += interest
+        prev_d = d
+
         h_val = sum(
             h['qty'] * float(dfs[t].loc[d, 'Close']) if d in dfs[t].index else h['qty'] * h['cost']
             for t, h in holdings.items()
@@ -275,8 +288,31 @@ def _run_full_backtest(macros: dict) -> dict:
         "_id": "main_fund", "cash": round(cash, 2), "holdings": holdings,
         "history": history, "equity_curve": equity_curve,
         "max_dd": round(max_dd, 2),
-        "inception": all_dates[0].strftime('%Y-%m-%d') if all_dates else "2021-10-01"
+        "inception": all_dates[0].strftime('%Y-%m-%d') if all_dates else "2021-10-01",
+        "cash_as_of": all_dates[-1].strftime('%Y-%m-%d') if all_dates else datetime.now().strftime('%Y-%m-%d'),
+        "interest_earned": round(interest_earned, 2),
+        "cash_rate": tr_10y,
     }
+
+
+def accrue_cash(pf: dict, annual_rate: float, as_of: datetime | None = None) -> float:
+    """Grow idle cash at `annual_rate` (daily compounding, ACT/365) from pf["cash_as_of"] to `as_of`.
+
+    Updates pf in place (cash, cash_as_of, interest_earned) and returns the interest added.
+    A portfolio saved before this feature has no cash_as_of; it starts accruing from today.
+    """
+    today = (as_of or datetime.now()).date()
+    start = pf.get("cash_as_of")
+    pf["cash_as_of"] = today.strftime("%Y-%m-%d")
+    if not start:
+        return 0.0
+    days = (today - datetime.strptime(start[:10], "%Y-%m-%d").date()).days
+    if days <= 0:
+        return 0.0
+    interest = pf.get("cash", 0.0) * ((1 + annual_rate) ** (days / 365) - 1)
+    pf["cash"] = round(pf.get("cash", 0.0) + interest, 2)
+    pf["interest_earned"] = round(pf.get("interest_earned", 0.0) + interest, 2)
+    return interest
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -289,6 +325,7 @@ def run_scan(pf: dict, tickers: list, tr10: float, md: float, pos_pct: float, tr
     Returns (results, actions): results are deep_analyze() rows plus "ticker",
     actions are (kind, ticker, price, pnl) tuples for this scan.
     """
+    accrue_cash(pf, tr10)  # bring idle cash up to date before sizing new positions
     results, actions = [], []
     for idx, t in enumerate(tickers):
         if on_progress:

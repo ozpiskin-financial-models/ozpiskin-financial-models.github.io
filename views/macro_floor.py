@@ -17,7 +17,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from models.macro_floor_engine import DEFAULT_TICKERS, _run_full_backtest, deep_analyze, fetch_macros, load_pf, run_scan, save_pf
+from models.macro_floor_engine import DEFAULT_TICKERS, _run_full_backtest, accrue_cash, deep_analyze, fetch_macros, load_pf, run_scan, save_pf
 from ui import kit
 
 START_CAPITAL = 100_000
@@ -64,6 +64,7 @@ with st.spinner("Loading macro inputs and the simulated portfolio…"):
 
 md = macros["margin_discount"]
 tr10 = macros["tr_10y"]
+accrue_cash(pf, tr10)  # display only: interest since the last save; persisted on the next scan
 
 hv = sum(h["qty"] * (deep_analyze(t, tr10, md) or {}).get("price", h["cost"]) for t, h in pf.get("holdings", {}).items())
 cash = pf.get("cash", START_CAPITAL)
@@ -107,12 +108,12 @@ tickers = [t.strip().upper() for t in universe.split(",") if t.strip()]
 
 kit.metrics(
     [
-        ("Simulated value", f"{CUR}{total_eq:,.0f}", f"from {CUR}{START_CAPITAL:,.0f}", kit.tone(total_pnl)),
+        ("Simulated value", f"{CUR}{total_eq:,.0f}", f"from {CUR}{START_CAPITAL:,.0f} · {len(pf.get('holdings', {}))} open", kit.tone(total_pnl)),
         ("Total return", f"{pnl_pct:+.1f}%", kit.signed_money(total_pnl, currency=CUR), kit.tone(total_pnl)),
         ("Max drawdown", f"{pf.get('max_dd', 0):.1f}%", "peak to trough"),
         ("Win rate", wr, f"{n_wins} of {n_trades} closed trades"),
+        ("Interest on cash", f"{CUR}{pf.get('interest_earned', 0):,.0f}", f"cash at TR 10Y · {tr10 * 100:.1f}%"),
         ("Sharpe", sharpe_val, "annualised, daily"),
-        ("Open positions", str(len(pf.get("holdings", {}))), f"{CUR}{hv:,.0f} invested"),
     ]
 )
 
@@ -261,7 +262,7 @@ def render_positions() -> None:
                 )
             kit.table(["Instrument", "Entry", "Target", "Last", "Unrealised P&L", "Days held"], rows, numeric=[1, 2, 3, 4, 5])
 
-    allocation = [("Cash", cash)] + [(t, h["qty"] * h["cost"]) for t, h in holdings.items()]
+    allocation = [("Cash · earning TR 10Y", cash)] + [(t, h["qty"] * h["cost"]) for t, h in holdings.items()]
     total_alloc = sum(value for _, value in allocation) or 1
     left, right = st.columns([1, 2], gap="medium")
     with left, kit.panel("allocation"):
@@ -293,6 +294,7 @@ def render_methodology() -> None:
             ("Bank bottom", "<code>Bond floor × (1 − margin-call discount)</code>, with the discount <code>US 10Y + 0.35 × (TR 10Y − US 10Y)</code>."),
             ("Entry", "Below both floors, after two consecutive exhaustion candles: high above the open, close below the open and the prior close."),
             ("Exit", "Target is the larger of the bond floor and entry +25%; trailing stop and time stop as set in Parameters (12%, 90 days by default)."),
+            ("Idle cash", "Cash not invested in stocks earns the TR 10Y yield, compounded daily — the same risk-free alternative the floors are built on."),
         ]
     )
     kit.section("Inputs & assumptions")
@@ -305,6 +307,7 @@ def render_methodology() -> None:
                 ("TR 10Y yield", "TradingView TVC:TR10Y", "Falls back to 32.0% if the feed is unavailable."),
                 ("Portfolio state", "MongoDB Atlas", "Session-only if the database is unreachable."),
                 ("Backtest", "Model engine", "₺100,000 start, 25% position size, 12% trailing stop, 90-day time stop."),
+                ("Interest on cash", "Model engine", "Today's TR 10Y yield is applied to every past year, as it is for the floors. Turkish yields were lower in 2021–2023, so the backtest overstates interest in those years."),
                 ("Universe & currency", "Model engine", "8 Borsa Istanbul stocks; every price, position and P&L is in Turkish lira (TRY)."),
             ],
         )
