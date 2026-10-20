@@ -115,14 +115,14 @@ header[data-testid="stHeader"], #MainMenu, footer, .stDeployButton, [data-testid
 .kt-sec-n { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* section tabs */
-.st-key-subnav { border-bottom: 1px solid var(--divider); margin-top: 32px; }
-.st-key-subnav [data-baseweb="button-group"] { gap: 32px; flex-wrap: wrap; }
-.st-key-subnav button { background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
-  padding: 8px 0 12px !important; min-height: 0 !important; margin-bottom: -1px; border-bottom: 2px solid transparent !important; }
-.st-key-subnav button p { font-size: 14px; color: var(--muted); transition: color 120ms; }
-.st-key-subnav button:hover p { color: var(--text); }
-.st-key-subnav button[kind="segmented_controlActive"] { border-bottom-color: var(--mint) !important; }
-.st-key-subnav button[kind="segmented_controlActive"] p { color: var(--text); font-weight: 600; }
+.st-key-subnav { margin: 40px 0 16px; }
+.st-key-subnav [data-baseweb="button-group"] { gap: 12px; flex-wrap: wrap; }
+.st-key-subnav button { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 8px !important;
+  box-shadow: none !important; padding: 10px 20px !important; min-height: 0 !important; transition: border-color 120ms, background 120ms; }
+.st-key-subnav button p { font-size: 14px; font-weight: 500; color: var(--text-2); }
+.st-key-subnav button:hover { border-color: var(--mint) !important; } .st-key-subnav button:hover p { color: var(--text); }
+.st-key-subnav button[kind="segmented_controlActive"] { background: rgba(52, 211, 153, 0.12) !important; border-color: var(--mint) !important; }
+.st-key-subnav button[kind="segmented_controlActive"] p { color: var(--mint); font-weight: 600; }
 
 /* range selector */
 [class*="st-key-range"] [data-baseweb="button-group"] { gap: 4px; }
@@ -195,7 +195,7 @@ header[data-testid="stHeader"], #MainMenu, footer, .stDeployButton, [data-testid
   .kt-metric { border-left: 0; border-top: 1px solid var(--divider); padding: 16px; }
   .kt-metric:nth-child(-n+2) { border-top: 0; } .kt-metric:nth-child(even) { border-left: 1px solid var(--divider); }
   [class*="st-key-ktpanel"] { padding: 16px; }
-  .st-key-subnav [data-baseweb="button-group"] { gap: 20px; }
+  .st-key-subnav [data-baseweb="button-group"] { gap: 8px; } .st-key-subnav button { padding: 8px 14px !important; }
 }
 </style>
 """

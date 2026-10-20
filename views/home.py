@@ -5,9 +5,6 @@ import streamlit as st
 from models.macro_floor_engine import DEFAULT_TICKERS
 from ui import kit
 
-BIST_COUNT = sum(ticker.endswith(".IS") for ticker in DEFAULT_TICKERS)
-US_COUNT = len(DEFAULT_TICKERS) - BIST_COUNT
-
 MODELS = [
     {
         "page": "views/crude_oil.py",
@@ -22,11 +19,11 @@ MODELS = [
     },
     {
         "page": "views/macro_floor.py",
-        "asset_class": "Equities · Macro",
+        "asset_class": "US Equities · Macro",
         "name": "Macro Floor",
-        "description": "Prices US and Turkish equities against sovereign-yield floors and simulates buying only after forced selling below those floors is exhausted.",
+        "description": "Prices US large-cap stocks against sovereign-yield floors and simulates buying only after forced selling below those floors is exhausted.",
         "facts": [
-            ("Universe", f"{len(DEFAULT_TICKERS)} stocks · {US_COUNT} US, {BIST_COUNT} BIST"),
+            ("Universe", f"{len(DEFAULT_TICKERS)} US stocks · USD"),
             ("Backtest", "5 years, simulated"),
             ("Paper portfolio", "$100,000 start"),
         ],

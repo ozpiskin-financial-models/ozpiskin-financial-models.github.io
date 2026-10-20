@@ -4,7 +4,8 @@ Calculation engine for the Macro Floor Model.
 Copied unchanged from live_uncle_tracker.py in the
 Macro-Floor-Forced-Liquidation-Model repository (macro feed, MongoDB storage,
 signal engine and 5-year backtest). run_scan() is the Signal Radar loop from
-the same file, moved into a function so the page can call it.
+the same file, moved into a function so the page can call it. The default
+universe is US-only (see DEFAULT_TICKERS); the calculations are unchanged.
 """
 
 from __future__ import annotations
@@ -25,11 +26,11 @@ urllib3.disable_warnings()
 # ═══════════════════════════════════════════════════════════════════════════
 # WATCHLIST
 # ═══════════════════════════════════════════════════════════════════════════
+# US-listed stocks only, so every price, position and P&L is in USD.
+# (The original universe also held 8 BIST stocks quoted in TRY.)
 DEFAULT_TICKERS = [
     "AAPL", "TSLA", "NVDA", "AMZN", "MSFT", "META", "GOOG", "AMD",
     "NFLX", "INTC", "JPM", "BAC",
-    "THYAO.IS", "AKBNK.IS", "ISCTR.IS", "TUPRS.IS", "GARAN.IS",
-    "SISE.IS", "KCHOL.IS", "SAHOL.IS",
 ]
 
 

@@ -25,13 +25,9 @@ ACTION_TONE = {"BUY": "blue", "SELL": "up", "STOP": "down", "TIME": "warn"}
 RANGES = {"1Y": pd.DateOffset(years=1), "3Y": pd.DateOffset(years=3), "All": None}
 
 
-def market_of(ticker: str) -> str:
-    return "BIST" if ticker.endswith(".IS") else "US"
-
-
-def price(ticker: str, value: float) -> str:
-    """Prices are quoted in the instrument's own currency (BIST in TRY, US in USD)."""
-    return f"₺{value:,.2f}" if market_of(ticker) == "BIST" else f"${value:,.2f}"
+def price(value: float) -> str:
+    """The universe is US-listed only, so every price is in USD."""
+    return f"${value:,.2f}"
 
 
 def proximity_state(proximity: float, signal: bool) -> tuple[str, str, str]:
@@ -55,9 +51,9 @@ def proximity_cell(proximity: float, color: str) -> str:
 
 
 kit.page_header(
-    "Equities · Macro",
+    "US Equities · Macro",
     "Macro Floor",
-    "Values US and BIST stocks against sovereign-yield floors and simulates entries only after forced selling below them is exhausted.",
+    "Values US stocks against sovereign-yield floors and simulates entries only after forced selling below them is exhausted.",
 )
 
 with st.spinner("Loading macro inputs and the simulated portfolio…"):
@@ -171,7 +167,7 @@ with kit.panel("equity"):
 
 def render_universe() -> None:
     with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
-        market_filter = kit.range_selector(["All", "US", "BIST"], key="macro_market", default="All")
+        kit.html(f'<p class="kt-meta">{len(tickers)} US-listed instruments · all prices and P&amp;L in USD</p>')
         run = st.button("Run paper scan", type="primary", icon=":material/radar:",
                         help="Applies the entry and exit rules to every instrument and updates the simulated portfolio.")
 
@@ -191,7 +187,7 @@ def render_universe() -> None:
             kit.table(
                 ["Action", "Instrument", "Price", "P&L"],
                 [
-                    (kit.badge(kind, ACTION_TONE.get(kind, "")), f'<span class="strong">{ticker}</span>', price(ticker, px),
+                    (kit.badge(kind, ACTION_TONE.get(kind, "")), f'<span class="strong">{ticker}</span>', price(px),
                      "—" if kind == "BUY" else f'<span class="kt-{kit.tone(pnl)}">{kit.signed_money(pnl)}</span>')
                     for kind, ticker, px, pnl in scan["actions"]
                 ],
@@ -203,8 +199,6 @@ def render_universe() -> None:
     with st.spinner("Computing floors for the universe…"):
         rows_data = []
         for ticker in tickers:
-            if market_filter != "All" and market_of(ticker) != market_filter:
-                continue
             analysis = deep_analyze(ticker, tr10, md)
             if analysis:
                 rows_data.append(analysis | {"ticker": ticker})
@@ -218,10 +212,9 @@ def render_universe() -> None:
         rows.append(
             (
                 f'<span class="strong">{r["ticker"]}</span> {held}',
-                kit.badge(market_of(r["ticker"])),
-                price(r["ticker"], r["price"]),
-                price(r["ticker"], r["bond_fv"]),
-                price(r["ticker"], r["bank_bot"]),
+                price(r["price"]),
+                price(r["bond_fv"]),
+                price(r["bank_bot"]),
                 f'<span class="kt-{"up" if r["dist_bond"] < 0 else "down"}">{r["dist_bond"]:+.1f}%</span>',
                 f"{r['from_high']:.1f}%",
                 f"{r['vol_20d']}%",
@@ -232,9 +225,9 @@ def render_universe() -> None:
     with kit.panel("universe"):
         kit.panel_header("Instrument universe", f"{len(rows)} instruments · ranked by proximity to the buy zone (0–100)")
         kit.table(
-            ["Instrument", "Market", "Price", "Bond floor", "Bank bottom", "vs floor", "vs 52W high", "Vol 20D", "Proximity", "State"],
+            ["Instrument", "Price", "Bond floor", "Bank bottom", "vs floor", "vs 52W high", "Vol 20D", "Proximity", "State"],
             rows,
-            numeric=[2, 3, 4, 5, 6, 7, 8],
+            numeric=[1, 2, 3, 4, 5, 6, 7],
         )
         kit.html('<p class="kt-meta" style="margin-top:16px">Read-only view: floors and states are recomputed from the latest prices '
                  "(cached for 15 minutes). Only “Run paper scan” changes the simulated portfolio.</p>")
@@ -257,15 +250,14 @@ def render_positions() -> None:
                 rows.append(
                     (
                         f'<span class="strong">{t}</span>',
-                        kit.badge(market_of(t)),
-                        price(t, h["cost"]),
-                        price(t, h["target"]),
-                        price(t, lp),
+                        price(h["cost"]),
+                        price(h["target"]),
+                        price(lp),
                         f'<span class="kt-{kit.tone(u)}">{kit.signed_money(u)}</span><span class="sub">{pc:+.1f}%</span>',
                         str(days),
                     )
                 )
-            kit.table(["Instrument", "Market", "Entry", "Target", "Last", "Unrealised P&L", "Days held"], rows, numeric=[2, 3, 4, 5, 6])
+            kit.table(["Instrument", "Entry", "Target", "Last", "Unrealised P&L", "Days held"], rows, numeric=[1, 2, 3, 4, 5])
 
     allocation = [("Cash", cash)] + [(t, h["qty"] * h["cost"]) for t, h in holdings.items()]
     total_alloc = sum(value for _, value in allocation) or 1
@@ -311,7 +303,7 @@ def render_methodology() -> None:
                 ("TR 10Y yield", "TradingView TVC:TR10Y", "Falls back to 32.0% if the feed is unavailable."),
                 ("Portfolio state", "MongoDB Atlas", "Session-only if the database is unreachable."),
                 ("Backtest", "Model engine", "$100,000 start, 25% position size, 12% trailing stop, 90-day time stop."),
-                ("Currency", "—", "BIST prices are in TRY and US prices in USD; the simulated portfolio adds positions without FX conversion, as in the original model."),
+                ("Universe & currency", "Model engine", "12 US-listed stocks; every price, position and P&L is in USD."),
             ],
         )
 
