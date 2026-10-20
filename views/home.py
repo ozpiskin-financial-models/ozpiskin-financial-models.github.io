@@ -19,13 +19,13 @@ MODELS = [
     },
     {
         "page": "views/macro_floor.py",
-        "asset_class": "US Equities · Macro",
+        "asset_class": "Borsa Istanbul · Macro",
         "name": "Macro Floor",
-        "description": "Prices US large-cap stocks against sovereign-yield floors and simulates buying only after forced selling below those floors is exhausted.",
+        "description": "Prices Borsa Istanbul stocks against the Turkish 10-year bond yield and simulates buying only after forced selling below that floor is exhausted.",
         "facts": [
-            ("Universe", f"{len(DEFAULT_TICKERS)} US stocks · USD"),
+            ("Universe", f"{len(DEFAULT_TICKERS)} BIST stocks · TRY"),
             ("Backtest", "5 years, simulated"),
-            ("Paper portfolio", "$100,000 start"),
+            ("Paper portfolio", "₺100,000 start"),
         ],
     },
 ]

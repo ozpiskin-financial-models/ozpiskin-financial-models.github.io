@@ -223,11 +223,11 @@ def pct(value: Optional[float], digits: int = 2, signed: bool = True) -> str:
     return f"{sign}{value:.{digits}f}%"
 
 
-def signed_money(value: Optional[float], digits: int = 0) -> str:
+def signed_money(value: Optional[float], digits: int = 0, currency: str = "$") -> str:
     if value is None:
         return "—"
     sign = "+" if value > 0 else "−" if value < 0 else ""
-    return f"{sign}${abs(value):,.{digits}f}"
+    return f"{sign}{currency}{abs(value):,.{digits}f}"
 
 
 def num(value: Optional[float], digits: int = 2) -> str:

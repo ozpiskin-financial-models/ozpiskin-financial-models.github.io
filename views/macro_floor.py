@@ -25,9 +25,11 @@ ACTION_TONE = {"BUY": "blue", "SELL": "up", "STOP": "down", "TIME": "warn"}
 RANGES = {"1Y": pd.DateOffset(years=1), "3Y": pd.DateOffset(years=3), "All": None}
 
 
+CUR = "₺"  # BIST-only universe: every price, position and P&L is in Turkish lira.
+
+
 def price(value: float) -> str:
-    """The universe is US-listed only, so every price is in USD."""
-    return f"${value:,.2f}"
+    return f"{CUR}{value:,.2f}"
 
 
 def proximity_state(proximity: float, signal: bool) -> tuple[str, str, str]:
@@ -51,9 +53,9 @@ def proximity_cell(proximity: float, color: str) -> str:
 
 
 kit.page_header(
-    "US Equities · Macro",
+    "Borsa Istanbul · Macro",
     "Macro Floor",
-    "Values US stocks against sovereign-yield floors and simulates entries only after forced selling below them is exhausted.",
+    "Values BIST stocks against a floor set by the Turkish 10-year bond yield and simulates entries only after forced selling below it is exhausted.",
 )
 
 with st.spinner("Loading macro inputs and the simulated portfolio…"):
@@ -105,12 +107,12 @@ tickers = [t.strip().upper() for t in universe.split(",") if t.strip()]
 
 kit.metrics(
     [
-        ("Simulated value", f"${total_eq:,.0f}", f"from ${START_CAPITAL:,.0f}", kit.tone(total_pnl)),
-        ("Total return", f"{pnl_pct:+.1f}%", kit.signed_money(total_pnl), kit.tone(total_pnl)),
+        ("Simulated value", f"{CUR}{total_eq:,.0f}", f"from {CUR}{START_CAPITAL:,.0f}", kit.tone(total_pnl)),
+        ("Total return", f"{pnl_pct:+.1f}%", kit.signed_money(total_pnl, currency=CUR), kit.tone(total_pnl)),
         ("Max drawdown", f"{pf.get('max_dd', 0):.1f}%", "peak to trough"),
         ("Win rate", wr, f"{n_wins} of {n_trades} closed trades"),
         ("Sharpe", sharpe_val, "annualised, daily"),
-        ("Open positions", str(len(pf.get("holdings", {}))), f"${hv:,.0f} invested"),
+        ("Open positions", str(len(pf.get("holdings", {}))), f"{CUR}{hv:,.0f} invested"),
     ]
 )
 
@@ -138,7 +140,7 @@ def equity_figure(window: str) -> go.Figure:
     figure = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.74, 0.26], vertical_spacing=0.06)
     figure.add_trace(
         go.Scatter(x=frame["Date"], y=frame["Equity"], name="Simulated portfolio value", mode="lines",
-                   line={"color": kit.MINT, "width": 2}, hovertemplate="$%{y:,.0f}"),
+                   line={"color": kit.MINT, "width": 2}, hovertemplate="₺%{y:,.0f}"),
         row=1, col=1,
     )
     figure.add_hline(y=START_CAPITAL, line={"color": kit.BORDER, "width": 1, "dash": "dot"}, row=1, col=1)
@@ -149,7 +151,7 @@ def equity_figure(window: str) -> go.Figure:
     )
     kit.style_figure(figure, 440)
     low, high = float(frame["Equity"].min()), float(frame["Equity"].max())
-    figure.update_yaxes(tickprefix="$", tickformat=",.0f", range=[min(low, START_CAPITAL) * 0.94, high * 1.03], row=1, col=1)
+    figure.update_yaxes(tickprefix=CUR, tickformat=",.0f", range=[min(low, START_CAPITAL) * 0.94, high * 1.03], row=1, col=1)
     figure.update_yaxes(ticksuffix="%", row=2, col=1)
     figure.update_xaxes(showticklabels=False, row=1, col=1)
     return figure
@@ -157,7 +159,7 @@ def equity_figure(window: str) -> go.Figure:
 
 with kit.panel("equity"):
     with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
-        kit.panel_header("Simulated portfolio value & drawdown", f"Daily · since {inception} · dotted line = $100,000 start")
+        kit.panel_header("Simulated portfolio value & drawdown", f"Daily · since {inception} · dotted line = ₺100,000 start")
         window = kit.range_selector(list(RANGES), key="macro_range", default="All")
     if eq_curve:
         kit.chart(equity_figure(window))
@@ -167,7 +169,7 @@ with kit.panel("equity"):
 
 def render_universe() -> None:
     with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
-        kit.html(f'<p class="kt-meta">{len(tickers)} US-listed instruments · all prices and P&amp;L in USD</p>')
+        kit.html(f'<p class="kt-meta">{len(tickers)} Borsa Istanbul instruments · all prices and P&amp;L in TRY</p>')
         run = st.button("Run paper scan", type="primary", icon=":material/radar:",
                         help="Applies the entry and exit rules to every instrument and updates the simulated portfolio.")
 
@@ -188,7 +190,7 @@ def render_universe() -> None:
                 ["Action", "Instrument", "Price", "P&L"],
                 [
                     (kit.badge(kind, ACTION_TONE.get(kind, "")), f'<span class="strong">{ticker}</span>', price(px),
-                     "—" if kind == "BUY" else f'<span class="kt-{kit.tone(pnl)}">{kit.signed_money(pnl)}</span>')
+                     "—" if kind == "BUY" else f'<span class="kt-{kit.tone(pnl)}">{kit.signed_money(pnl, currency=CUR)}</span>')
                     for kind, ticker, px, pnl in scan["actions"]
                 ],
                 numeric=[2, 3],
@@ -253,7 +255,7 @@ def render_positions() -> None:
                         price(h["cost"]),
                         price(h["target"]),
                         price(lp),
-                        f'<span class="kt-{kit.tone(u)}">{kit.signed_money(u)}</span><span class="sub">{pc:+.1f}%</span>',
+                        f'<span class="kt-{kit.tone(u)}">{kit.signed_money(u, currency=CUR)}</span><span class="sub">{pc:+.1f}%</span>',
                         str(days),
                     )
                 )
@@ -266,7 +268,7 @@ def render_positions() -> None:
         kit.panel_header("Allocation", "At cost")
         kit.table(
             None,
-            [(f'<span class="strong">{name}</span>', f"${value:,.0f}", f"{value / total_alloc * 100:.1f}%") for name, value in allocation],
+            [(f'<span class="strong">{name}</span>', f"{CUR}{value:,.0f}", f"{value / total_alloc * 100:.1f}%") for name, value in allocation],
             numeric=[1, 2],
         )
     with right, kit.panel("trades"):
@@ -275,7 +277,7 @@ def render_positions() -> None:
         for entry in reversed(hist):
             parts = [p.strip() for p in entry.split("|")]
             if len(parts) >= 3:
-                details = " · ".join(parts[3:]).replace("$+", "+$").replace("$-", "−$")
+                details = " · ".join(parts[3:]).replace("$+", f"+{CUR}").replace("$-", f"−{CUR}").replace("$", CUR)
                 rows.append((f'<span class="kt-muted">{parts[0]}</span>', kit.badge(parts[1], ACTION_TONE.get(parts[1], "")),
                              f'<span class="strong">{parts[2]}</span>', details))
         if rows:
@@ -302,8 +304,8 @@ def render_methodology() -> None:
                 ("US 10Y yield", "Yahoo Finance ^TNX", "Falls back to 4.5% if the feed is unavailable."),
                 ("TR 10Y yield", "TradingView TVC:TR10Y", "Falls back to 32.0% if the feed is unavailable."),
                 ("Portfolio state", "MongoDB Atlas", "Session-only if the database is unreachable."),
-                ("Backtest", "Model engine", "$100,000 start, 25% position size, 12% trailing stop, 90-day time stop."),
-                ("Universe & currency", "Model engine", "12 US-listed stocks; every price, position and P&L is in USD."),
+                ("Backtest", "Model engine", "₺100,000 start, 25% position size, 12% trailing stop, 90-day time stop."),
+                ("Universe & currency", "Model engine", "8 Borsa Istanbul stocks; every price, position and P&L is in Turkish lira (TRY)."),
             ],
         )
 
